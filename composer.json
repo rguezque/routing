@@ -1,0 +1,25 @@
+{
+    "name": "rguezque/routing",
+    "description": "Simple router PHP No-POO",
+    "keywords": ["php", "routing", "route"],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Luis Rodriguez",
+            "email": "rguezque@gmail.com",
+            "role": "Original developer"
+        }
+    ],
+    "require": {
+        "php": ">=7.2.19"
+    },
+    "autoload": {
+        "files": [
+            "src/helper.php", 
+            "src/connection.php", 
+            "src/http.php", 
+            "src/template.php", 
+            "src/routing.php"
+        ]
+    }
+}

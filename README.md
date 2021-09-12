@@ -1,6 +1,33 @@
 # Routing
  *Simple router PHP No-POO*
 
+## Configure *WebServer*
+
+En *Apache* crea y edita un archivo `.htaccess` con lo siguiente:
+
+```
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+	
+    RewriteEngine On
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+```
+
+En *Nginx* agrega lo siguiente en el archivo de configuración:
+
+```
+server {
+    location / {
+        try_files $uri $uri/ /index.php;
+    }
+}
+```
+
 ## Routes
 
 Cada ruta se compone de un nombre único, el *string* de la ruta y un callback. Dependiendo del método de petición que aceptará la ruta será la función a utilizar. Los métodos aceptados son `GET` y  `POST` que corresponden con las funciones `get()` y  `post()`.

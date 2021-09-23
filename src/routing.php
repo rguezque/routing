@@ -155,14 +155,17 @@ function dispatch(): void {
 /**
  * Renderiza una plantilla directamente sin tener que definir toda una ruta y controlador
  * 
+ * @param string $name Nombre de la ruta
  * @param string $path Definición de ruta
  * @param string $template Nombre de la plantilla
  * @param array $arguments Parámetros pasados a la plantilla
  * @return void
  */
-function view(string $path, string $template, array $arguments = []): void {
-    $name = str_replace('/', '_', trim($path, '/\\'));
+function view(string $name, string $path, string $template, array $arguments = []): void {
     get($name, $path, function() use($template, $arguments) {
+        if(0 < func_num_args()) {
+            $arguments = array_merge($arguments, func_get_arg(0));
+        }
         template($template, $arguments);
     });
 }

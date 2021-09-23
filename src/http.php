@@ -246,6 +246,17 @@ function getglobal(string $name) {
 }
 
 /**
+ * Genera una URI con parámetrs de petición GET
+ * 
+ * @param string $uri Ruta objetivo
+ * @param array $vars Variables
+ * @return string
+ */
+function build_query(string $uri, array $vars): string {
+    return $uri .'?'. http_build_query($vars);
+}
+
+/**
  * Devuelve una respuesta HTTP
  * 
  * @param string $content Contenido del response

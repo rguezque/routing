@@ -37,7 +37,7 @@ Cada ruta se compone de un nombre único, el *string* de la ruta y un callback. 
 
 require __DIR__.'/vendor/autoload.php';
 
-use function rguezque\{dispatch, get, with_namespace};
+use function rguezque\{dispatch, get, with_prefix};
 use function rguezque\http\json_response;
 
 get('homepage', '/', function() {
@@ -50,7 +50,7 @@ get('homepage', '/', function() {
     json_response($data);
 });
 
-with_namespace('/foo', function() {
+with_prefix('/foo', function() {
     get('foo_index', '/', function() {
         echo 'Foo';
     });
@@ -103,20 +103,20 @@ Los *wildcards* que se definan en la ruta serán agregados como parámetros a se
 
 ### Groups
 
-Agrupa rutas con un *namespace*.
+Agrupa rutas con un *prefijo* en común.
 
 ```php
 <?php
 
 require __DIR__.'/vendor/autoload.php';
 
-use function rguezque\{dispatch, get, with_namespace};
+use function rguezque\{dispatch, get, with_prefix};
 
 get('index', '/', function() {
     echo 'hola mundo';
 });
 
-with_namespace('/foo', function() {
+with_prefix('/foo', function() {
     get('index_foo', '/', function() {
         echo 'Foo';
     });
@@ -146,9 +146,9 @@ Todo lo anterior genera las rutas:
 
 ## Hooks
 
-El router permite agregar *hooks* a las rutas, ya sea antes o después, solo basta especificar a que ruta o grupo de rutas se asignara una acción. Un *hook* antes de una ruta(`before()`) puede o no retornar un resultado, si devuelve un valor este se agrega al *array* de argumentos enviados al controlador de dicha ruta y se puede recuperar con la clave `'before_data'`.
+El router permite agregar *hooks* a las rutas, ya sea antes o después, solo basta especificar a que ruta o grupo de rutas (a través de un *array*) se asignara una acción. Un *hook* (`before()`) antes de una ruta puede o no retornar un resultado, si devuelve un valor este se agrega al *array* de argumentos enviados al controlador de dicha ruta y se puede recuperar con la clave `'before_data'`.
 
-Un *hook* después de una ruta (`after()`), atrapará el resultado de su controlador en un array y dicho resultado puede ser recuperado con la clave `'controller_data'`.
+Un *hook* (`after()`) después de una ruta, atrapará el resultado de su controlador en un array y dicho resultado puede ser recuperado con la clave `'controller_data'`.
 
 ```php
 // Se define una ruta de nombre 'index' y atrapa el resultado del hook previo

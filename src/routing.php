@@ -13,7 +13,7 @@ namespace routing;
  * @function string get_basepath() Devuelve el string del directorio base.
  * @function void get(string $path, $callback, ?string $name = null) Agrega una ruta GET.
  * @function void post(string $path, $callback, ?string $name = null) Agrega una ruta POST.
- * @function void with_namespace(string $namespace, Closure $closure) Define grupos de rutas bajo un namespace de ruta en común.
+ * @function void with_prefix(string $namespace, Closure $closure) Define grupos de rutas bajo un prefijo de ruta en común.
  * @function void before($route_name, Closure $action) Add a hook before a route or routes group
  * @function void after($route_name, Closure $action) Add a hook after a route or routes group
  * @function string generate_uri(string $route_name) Genera una URI de una ruta nombrada.
@@ -62,7 +62,7 @@ setglobal('HOOKS', array('before' => [], 'after' => []));
 /**
  * Define un namespace para un grupo de rutas
  */
-setglobal('NAMESPACE', '');
+setglobal('GROUP_PREFIX', '');
 
 /**
  * Define el subdirectorio donde se aloja el router
@@ -218,7 +218,7 @@ function route(string $method, string $name, string $path, $callback): void {
     }
 
     $path = str_path($path);
-    $path = glue(getglobal('NAMESPACE'), $path);
+    $path = glue(getglobal('GROUP_PREFIX'), $path);
     // Guarda la ruta en la colección de rutas
     $routes = (array) getglobal('ROUTES');
     $routes[$method][] = ['name' => $name, 'path' => $path, 'callback' => $callback];
@@ -229,17 +229,17 @@ function route(string $method, string $name, string $path, $callback): void {
 }
 
 /**
- * Define grupos de rutas con namespace
+ * Define grupos de rutas con un mismo prefijo
  * 
- * @param string $namespace Namespace del grupo
- * @param Closure $closure Calllback con la definición de rutas
+ * @param string $prefix Prefijo de las rutas
+ * @param Closure $closure Callback con la definición de rutas
  * @return void
  */
-function with_namespace(string $namespace, Closure $closure): void {
-    $namespace = str_path($namespace);
-    setglobal('NAMESPACE', $namespace);
+function with_prefix(string $prefix, Closure $closure): void {
+    $prefix = str_path($prefix);
+    setglobal('GROUP_PREFIX', $prefix);
     $closure();
-    setglobal('NAMESPACE', '');
+    setglobal('GROUP_PREFIX', '');
 }
 
 /**

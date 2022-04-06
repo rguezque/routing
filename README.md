@@ -30,7 +30,9 @@ server {
 
 ## Routes
 
-Cada ruta se compone de un nombre único, el *string* de la ruta y un callback. Dependiendo del método de petición que aceptará la ruta será la función a utilizar. Los métodos aceptados son `GET` y  `POST` que corresponden con las funciones `get()` y  `post()`. Las rutas soportan la definición de *wildcards*, que al empalmar con alguna petición son extraídos como parámetros y enviados al controlador (línea 36 del ejemplo de abajo).
+Cada ruta se compone del *string* de la ruta y un callback. Los métodos aceptados son `GET` y  `POST` que corresponden con las funciones `get()` y  `post()`. Las rutas soportan la definición de *wildcards*, que al coincidir con alguna petición son enviados como argumentos al controlador.
+
+Opcionalmente se puede asignar un nombre único a cada ruta, enviando tanto el nombre como el string de la ruta en un *array*, es ese orden estrictamente. Los nombres sirven para asignar *hooks* (Ver [Hooks](#hooks))y/o generar la URI (Ver [Generate URI](#generateuri)).
 
 ```php
 ?php
@@ -40,7 +42,8 @@ require __DIR__.'/vendor/autoload.php';
 use function rguezque\{dispatch, get, with_prefix};
 use function rguezque\http\json_response;
 
-get('homepage', '/', function() {
+// Una ruta con nombre
+get(['homepage', '/'], function() {
     $data = [
         'greeting' => 'Hola',
         'name' => 'John',
@@ -51,24 +54,24 @@ get('homepage', '/', function() {
 });
 
 with_prefix('/foo', function() {
-    get('foo_index', '/', function() {
+    get('/', function() {
         echo 'Foo';
     });
 
-    get('foo_bar', '/bar', function() {
+    get('/bar', function() {
         echo 'Bar';
     });
 
-    get('foo_goo', '/goo', function() {
+    get('/goo', function() {
         echo 'Goo';
     });
 });
 
-get('baz_route', '/baz', function() {
+get('/baz', function() {
     echo 'Baz';
 });
 
-get('hola_route', '/hola/{nombre}', function(array $args) {
+get('/hola/{nombre}', function(array $args) {
     printf('Hola %s.', $args['nombre']);
 });
 
@@ -81,7 +84,7 @@ try {
 ?>
 ```
 
-La función `view()` renderiza una plantilla en una ruta directamente sin necesidad de definir un controlador. Como parámetro recibe el nombre de la ruta, la ruta en sí, el nombre de la plantilla y opcionalmente un *array* asociativo con argumentos para pasar a la plantilla. Este tipo de rutas son de tipo `GET`.
+La función `view()` renderiza una plantilla en una ruta directamente sin necesidad de definir un controlador. Como parámetro el string de la ruta (opcional nombre de la ruta), el nombre del archivo plantilla y opcionalmente un *array* asociativo con argumentos para pasar a la plantilla. Este tipo de rutas son de tipo `GET`. 
 
 ```php
 ?php
@@ -93,13 +96,13 @@ use function rguezque\template\set_views_path;
 
 set_views_path(__DIR__.'/templates');
 
-view('welcome', '/welcome/home', 'homepage.php');
+view('/welcome/home', 'homepage.php');
 
 dispatch();
 ?>
 ```
 
-Los *wildcards* que se definan en la ruta serán agregados como parámetros a ser enviados a la plantilla.
+Los *wildcards* que se definan en la ruta serán agregados como parámetros a ser enviados a la plantilla. Si este tipo de rutas tiene un *hook* asignado antes y este devuelve un valor, este resultado también será agregado como argumentos de la plantilla.
 
 ### Groups
 
@@ -112,20 +115,20 @@ require __DIR__.'/vendor/autoload.php';
 
 use function rguezque\{dispatch, get, with_prefix};
 
-get('index', '/', function() {
+get('/', function() {
     echo 'hola mundo';
 });
 
 with_prefix('/foo', function() {
-    get('index_foo', '/', function() {
+    get('/', function() {
         echo 'Foo';
     });
 
-    get('foo_bar', '/bar', function() {
+    get('/bar', function() {
         echo 'Bar';
     });
 
-    get('foo_goo', '/goo', function() {
+    get('/goo', function() {
         echo 'Goo';
     });
 });
@@ -144,16 +147,16 @@ Todo lo anterior genera las rutas:
 /foo/goo
 ```
 
-## Hooks
+## <a name="hooks">Hooks</a>
 
-El router permite agregar *hooks* a las rutas, ya sea antes o después, solo basta especificar a que ruta o grupo de rutas (a través de un *array*) se asignara una acción. Un *hook* (`before()`) antes de una ruta puede o no retornar un resultado, si devuelve un valor este se agrega al *array* de argumentos enviados al controlador de dicha ruta y se puede recuperar con la clave `'before_data'`.
+El router permite agregar *hooks* solo a las rutas que tienen nombre, ya sea antes o después, solo basta especificar a que ruta o grupo de rutas (a través de un *array*) se asignara una acción. Un *hook* (`before()`) antes de una ruta puede o no retornar un resultado, si devuelve un valor este se agrega al *array* de argumentos enviados al controlador de dicha ruta y se puede recuperar con la clave `'@bdata'`.
 
-Un *hook* (`after()`) después de una ruta, atrapará el resultado de su controlador en un array y dicho resultado puede ser recuperado con la clave `'controller_data'`.
+Un *hook* (`after()`) después de una ruta, atrapará el resultado de su controlador en un array y dicho resultado puede ser recuperado con la clave `'@cdata'`.
 
 ```php
 // Se define una ruta de nombre 'index' y atrapa el resultado del hook previo
-get('index', '/', function(array $args) {
-    return sprintf('Hola %s', $args['before_data']);
+get(['index', '/'], function(array $args) {
+    return sprintf('Hola %s', $args['@bdata']);
 });
 
 // Se asigna a la ruta 'index' un hook antes y devuelve un resultado al controlador
@@ -163,7 +166,7 @@ before('index', function() {
 
 // Se asigna a la ruta 'index' un hook después y atrapa el resultado del controlador para mostrar un resultado final
 after('index', function(array $args) {
-    printf('%s cruel', $args['controller_data']);
+    printf('%s cruel', $args['@cdata']);
 });
 ```
 
@@ -187,21 +190,21 @@ Devuelve una redireccion a otra URI.
 use function rguezque\http\redirect_response;
 use function rguezque\{generate_uri, get, dispatch};
 
-get('index', '/', function() {
+get('/', function() {
     // A una ruta según su nombre
     redirect_response(generate_uri('foo_page'));
     // A una URI
     redirect_response('https://www.fakesite.foo');
 });
 
-get('foo_page', '/foo', function() {
+get('/foo', function() {
     echo 'Foo';
 });
 
 dispatch();
 ```
 
-## Generate URI
+## <a name="generateuri">Generate URI</a>
 
 Genera la URI correspondiente de una ruta según su nombre.
 
@@ -225,18 +228,18 @@ Las plantillas son buscadas en el directorio que se defina previamente con la fu
 require __DIR__.'/vendor/autoload.php';
 
 use function rguezque\{get, dispatch};
-use function rguezque\template\{set_views_path, template};
+use function rguezque\template\{set_views_path, render};
 
 set_views_path(__DIR__.'/views');
 
 // Renderiza el template
-get('index', '/', function() {
-    template('homepage', ['mensaje' => 'Hola mundo']);
+get('/', function() {
+    render('homepage', ['mensaje' => 'Hola mundo']);
 });
 
 // Atrapa el template en una variable para uso posterior
-get('index', '/', function() {
-    $view = template('homepage', ['mensaje' => 'Hola mundo'], true);
+get('/', function() {
+    $view = render('homepage', ['mensaje' => 'Hola mundo'], true);
 });
 
 dispatch();
@@ -250,22 +253,26 @@ dispatch();
 ?>
 ```
 
-## PDO
+## PDO MySQL
 
 ```php
 <?php
 
 require __DIR__.'/vendor/autoload.php';
 
-use function rguezque\{get, dispatch};
-use function rguezque\connection\pdo_connection;
+use function rguezque\connection\mysql_connection;
 
-get('index', '/', function() {
-	$db = pdo_connection('mysql:host=localhost;port=3306;dbname=nombre_bd;charset=utf8', 'nombre_usuario', 'clave_acceso', [/*...opciones...*/]);
-    //...
-});
-
-dispatch();
+$db = mysql_connection(
+    [
+        'host' => 'localhost',
+        'port' => 3306,
+        'dbname' => 'nombre_bd',
+        'charset' => 'utf8'
+    ], 
+    'nombre_usuario', 
+    'clave_acceso', 
+    [/*...opciones...*/]
+);
 ```
 
 ## Request/Response
@@ -277,11 +284,11 @@ dispatch();
 - `get_body_params()`: Devuelve el array $_POST
 - `get_files_params()`: Devuelve el array $_FILES
 - `get_globals_params()`: Devuelve el array $GLOBALS
-- `setglobal(string $name, $value)`: Crea una variable global.
-- `getglobal(string $name)`: Devuelve una variable global.
+- `setglobal(string $name, $value)`: Crea/sobrescribe una variable global.
+- `getglobal(string $name, $default = null)`: Devuelve una variable global. Si no existe se devuelve el valor especificado como default.
 - `build_query(string $uri, array $vars)`: Genera una URI con parámetros de petición GET.
 - `response(string $body = '', int $code = HTTP_OK, ?array $header = null)`: Devuelve una respuesta HTTP.
-- `json_response(array $data)`: Devuelve una respuesta HTTP en formato json
+- `json_response($data, bool $encode)`: Devuelve una respuesta http en formato JSON. Si los datos ya están el formato JSON, se envía un segundo argumento `false`.
 - `redirect_response(string $uri)`: Redirecciona a otra ruta o URL.
 
 

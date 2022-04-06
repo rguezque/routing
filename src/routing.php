@@ -25,44 +25,47 @@ use Closure;
 use InvalidArgumentException;
 use LogicException;
 use OutOfBoundsException;
+use OutOfRangeException;
 use RuntimeException;
 
-use function routing\helper\glue;
 use function routing\helper\is_assoc_array;
 use function routing\helper\remove_trailing_slash;
-use function routing\helper\str_path;
+use function routing\helper\pathformat;
 use function routing\http\setglobal;
 use function routing\http\getglobal;
 use function routing\http\get_server_params;
 use function routing\http\response;
-use function routing\template\template;
+use function routing\template\render;
 
 /**
- * Métodos aceptados
- * 
- * @var string[]
+ * Inicializa la variable global que contendra todas las variables del router
  */
-const ALLOWED_REQUEST_METHODS = array('GET', 'POST');
+setglobal('ROUTING_DATA', []);
+
+/**
+ * Métodos de petición soportados por el router
+ */
+set_routing_data('ALLOWED_REQUEST_METHODS', ['GET', 'POST']);
 
 /**
  * Colección de rutas
  */
-setglobal('ROUTES', array());
+set_routing_data('ROUTES', array());
 
 /**
  * Colección de URI de cada ruta
  */
-setglobal('ROUTE_NAMES', array());
+set_routing_data('ROUTE_NAMES', array());
 
 /**
  * Almacena definiciones de hooks (ganchos)
  */
-setglobal('HOOKS', array('before' => [], 'after' => []));
+set_routing_data('HOOKS', array('before' => [], 'after' => []));
 
 /**
  * Define un namespace para un grupo de rutas
  */
-setglobal('GROUP_PREFIX', '');
+set_routing_data('GROUP_PREFIX', '');
 
 /**
  * Define el subdirectorio donde se aloja el router
@@ -71,7 +74,7 @@ setglobal('GROUP_PREFIX', '');
  * @return void
  */
 function set_basepath(string $path): void {
-    setglobal('BASEPATH', str_path($path));
+    set_routing_data('BASEPATH', pathformat($path));
 }
 
 /**
@@ -80,13 +83,39 @@ function set_basepath(string $path): void {
  * @return string
  */
 function get_basepath(): string {
-    return getglobal('BASEPATH') ?? '';
+    return get_routing_data('BASEPATH') ?? '';
+}
+
+/**
+ * Crea una variable de acceso global utilizada por el router
+ * 
+ * @param string $key Nombre de la variable
+ * @param mixed $value Valor de la variable
+ * @return void
+ */
+function set_routing_data(string $key, $value): void {
+    $data = getglobal('ROUTING_DATA');
+    $data[$key] = $value;
+    setglobal('ROUTING_DATA', $data);
+}
+
+/**
+ * Devuelve una variable de acceso global utilizada por el router
+ * 
+ * @param string $key Nombre de la variable del router
+ * @param mixed $default Valor default a devolver si no existe la variable solicitada
+ * @return mixed
+ */
+function get_routing_data(string $key, $default = null) {
+    $data = getglobal('ROUTING_DATA');
+    return $data[$key] ?? $default;
 }
 
 /**
  * Ejecuta el router
  * 
  * @return void
+ * @throws OutOfBoundsException
  * @throws RuntimeException
  */
 function dispatch(): void {
@@ -99,12 +128,12 @@ function dispatch(): void {
         $request_method = $server['REQUEST_METHOD'];
 
         // Valida que el método de petición recibido sea soportado por el router
-        if(!in_array($request_method, ALLOWED_REQUEST_METHODS)) {
-            throw new RuntimeException(sprintf('El método de petición %s no está soportado.', $request_method));
+        if(!in_array($request_method, get_routing_data('ALLOWED_REQUEST_METHODS'))) {
+            throw new OutOfBoundsException(sprintf('El método de petición %s no está soportado.', $request_method));
         }
 
         // Dependiendo del método de petición http se elige el array correspondiente de rutas
-        $all_routes = getglobal('ROUTES');
+        $all_routes = get_routing_data('ROUTES');
         $routes = $all_routes[$request_method];
 
         // Separa y extrae el URI solicitado de los parámetros GET que pudieran ser enviados por la URI
@@ -115,7 +144,7 @@ function dispatch(): void {
         foreach($routes as $route) {
             // Prepara el string de la ruta
             $path = $route['path'];
-            $path = glue(get_basepath(), $path);
+            $path = get_basepath() . $path;
         
             if(preg_match(route_pattern($path), $request_uri, $arguments)) {
                 array_shift($arguments);
@@ -124,12 +153,12 @@ function dispatch(): void {
                 $callback = $route['callback'];
                 $route_name = $route['name'];
                 
-                $hooks = getglobal('HOOKS');
+                $hooks = get_routing_data('HOOKS');
                 // Busca si existe un hook antes y lo ejecuta
                 if(array_key_exists($route_name, $hooks['before'])) {
                     $result = call_user_func($hooks['before'][$route_name]);
                     if($result) {
-                        $arguments = array_merge($arguments, ['before_data' => $result]);
+                        $arguments = array_merge($arguments, ['@bdata' => $result]);
                     }
                 }
 
@@ -139,7 +168,7 @@ function dispatch(): void {
                 // Busca si existe un hook después y lo ejecuta
                 if(array_key_exists($route_name, $hooks['after'])) {
                     $result 
-                        ? call_user_func($hooks['after'][$route_name], ['controller_data' => $result]) 
+                        ? call_user_func($hooks['after'][$route_name], ['@cdata' => $result]) 
                         : call_user_func($hooks['after'][$route_name]);
                 }
 
@@ -163,69 +192,88 @@ function dispatch(): void {
  */
 function view(string $name, string $path, string $template, array $arguments = []): void {
     get($name, $path, function() use($template, $arguments) {
+        // Detecta si se envía un argumento de un hook before y lo agrega
         if(0 < func_num_args()) {
             $arguments = array_merge($arguments, func_get_arg(0));
         }
-        template($template, $arguments);
+        
+        render($template, $arguments);
     });
 }
 
 /**
  * Mapea una ruta que solo acepta el método de petición GET
  * 
- * @param string $name Nombre de la ruta
- * @param string $path Definición de ruta
+ * @param array|string $path_data Nombre y/o definición del string de ruta
  * @param mixed $callback Controlador de la ruta
  * @return void
  */
-function get(string $name, string $path, $callback): void {
-    route('GET', $name, $path, $callback);
+function get($path_data, $callback): void {
+    route('GET', $path_data, $callback);
 }
 
 /**
  * Mapea una ruta que solo acepta el método de petición POST
  * 
- * @param string $name Nombre de la ruta
- * @param string $path Definición de ruta
+ * @param array|string $path_data Nombre y/o definición del string de ruta
  * @param mixed $callback Controlador de la ruta
  * @return void
  */
-function post(string $name, string $path, $callback): void {
-    route('POST', $name, $path, $callback);
+function post($path_data, $callback): void {
+    route('POST', $path_data, $callback);
 }
 
 /**
  * Mapea una ruta
  * 
  * @param string $method Método de petición
- * @param string $name Nombre de la ruta
- * @param string $path Definición de ruta
+ * @param array|string $path_data Nombre y/o definición del string de ruta
  * @param mixed $callback Controlador de la ruta
  * @return void
- * @throws RuntimeException
+ * @throws OutOfRangeException
+ * @throws InvalidArgumentException
  * @throws LogicException
  */
-function route(string $method, string $name, string $path, $callback): void {
+function route(string $method, $path_data, $callback): void {
+    if(is_array($path_data)) {
+        list($name, $path) = $path_data;
+        $name = trim($name);
+    } else {
+        $name = null;
+        $path = $path_data;
+    }
+
     $method = strtoupper(trim($method));
     // Valida que el método de petición recibido sea soportado por el router
-    if(!in_array($method, ALLOWED_REQUEST_METHODS)) {
-        throw new RuntimeException(sprintf('El método de petición %s no está soportado en la definición de la ruta %s:"%s".', $method, $name, $path));
+    if(!in_array($method, get_routing_data('ALLOWED_REQUEST_METHODS'))) {
+        throw new OutOfRangeException(sprintf('El método de petición %s no está soportado en la definición de la ruta %s:"%s".', $method, $name, $path));
     }
 
     // Verifica si ya existe una ruta con el mismo nombre
-    if(array_key_exists($name, getglobal('ROUTE_NAMES'))) {
-        throw new LogicException(sprintf('Ya existe una ruta con el nombre "%s".', $name));
+    if(isset($name)) {
+        if('' === $name) {
+            throw new InvalidArgumentException(sprintf('El nombre de la ruta "%s" no puede ser una cadena vacía.', $path));
+        }
+        if(array_key_exists($name, get_routing_data('ROUTE_NAMES'))) {
+            throw new LogicException(sprintf('Ya existe una ruta con el nombre "%s".', $name));
+        }
     }
 
-    $path = str_path($path);
-    $path = glue(getglobal('GROUP_PREFIX'), $path);
+    $path = pathformat($path);
+    $path = get_routing_data('GROUP_PREFIX') . $path;
     // Guarda la ruta en la colección de rutas
-    $routes = (array) getglobal('ROUTES');
-    $routes[$method][] = ['name' => $name, 'path' => $path, 'callback' => $callback];
-    setglobal('ROUTES', $routes);
+    $routes = (array) get_routing_data('ROUTES');
+    $routes[$method][] = [
+        'name' => $name, 
+        'path' => $path, 
+        'callback' => $callback
+    ];
+    set_routing_data('ROUTES', $routes);
 
-    // Guarda o genera el nombre de la ruta
-    save_route_name($path, $name);
+    // Guarda o el nombre de la ruta
+    if(isset($name)) {
+        save_route_name($path, $name);
+    }
 }
 
 /**
@@ -236,10 +284,10 @@ function route(string $method, string $name, string $path, $callback): void {
  * @return void
  */
 function with_prefix(string $prefix, Closure $closure): void {
-    $prefix = str_path($prefix);
-    setglobal('GROUP_PREFIX', $prefix);
+    $prefix = pathformat($prefix);
+    set_routing_data('GROUP_PREFIX', $prefix);
     $closure();
-    setglobal('GROUP_PREFIX', '');
+    set_routing_data('GROUP_PREFIX', '');
 }
 
 /**
@@ -249,11 +297,10 @@ function with_prefix(string $prefix, Closure $closure): void {
  * @param string $name Nombre de la ruta
  * @return void
  */
-function save_route_name(string $path, ?string $name = null): void {
-    $name = $name ?? uniqid('routing_', true);
-    $routes_path = getglobal('ROUTE_NAMES');
+function save_route_name(string $path, string $name): void {
+    $routes_path = get_routing_data('ROUTE_NAMES');
     $routes_path[$name] = $path;
-    setglobal('ROUTE_NAMES', $routes_path);
+    set_routing_data('ROUTE_NAMES', $routes_path);
 }
 
 /**
@@ -264,7 +311,7 @@ function save_route_name(string $path, ?string $name = null): void {
  * @return void
  */
 function before($route_name, Closure $action): void {
-    $hooks = getglobal('HOOKS');
+    $hooks = get_routing_data('HOOKS');
     if(is_array($route_name)) {
         foreach($route_name as $route) {
             $hooks['before'][$route] = $action;
@@ -272,7 +319,7 @@ function before($route_name, Closure $action): void {
     } else {
         $hooks['before'][$route_name] = $action;
     }
-    setglobal('HOOKS', $hooks);
+    set_routing_data('HOOKS', $hooks);
 }
 
 /**
@@ -283,7 +330,7 @@ function before($route_name, Closure $action): void {
  * @return void
  */
 function after($route_name, Closure $action): void {
-    $hooks = getglobal('HOOKS');
+    $hooks = get_routing_data('HOOKS');
     if(is_array($route_name)) {
         foreach($route_name as $route) {
             $hooks['after'][$route] = $action;
@@ -291,7 +338,7 @@ function after($route_name, Closure $action): void {
     } else {
         $hooks['after'][$route_name] = $action;
     }
-    setglobal('HOOKS', $hooks);
+    set_routing_data('HOOKS', $hooks);
 }
 
 /**
@@ -305,7 +352,7 @@ function after($route_name, Closure $action): void {
  * @throws ArgumentCountError
  */
 function generate_uri(string $route_name, array $params = []): string {
-    $route_names = getglobal('ROUTE_NAMES');
+    $route_names = get_routing_data('ROUTE_NAMES');
 
     if(!array_key_exists($route_name, $route_names)) {
         throw new OutOfBoundsException(sprintf('No existe una ruta con el nombre "%s".', $route_name));
@@ -328,7 +375,7 @@ function generate_uri(string $route_name, array $params = []): string {
         },$path);
     }
 
-    return str_path($path);
+    return pathformat($path);
 }
 
 /**
@@ -338,7 +385,7 @@ function generate_uri(string $route_name, array $params = []): string {
  * @return string
  */
 function route_pattern(string $path): string {
-    $parse_path = str_replace('/', '\/', str_path($path));
+    $parse_path = str_replace('/', '\/', pathformat($path));
     $parse_path = preg_replace('#{(\w+)}#', '(?<$1>\w+)', $parse_path);
 
     return '#^'.$parse_path.'$#i';
@@ -355,8 +402,7 @@ function route_pattern(string $path): string {
  * @return string
  */
 function parse_request_uri(string &$uri): string {
-    $uri = parse_url($uri, PHP_URL_PATH);
-    return rawurldecode($uri);
+    return rawurldecode(parse_url($uri, PHP_URL_PATH));
 }
 
 ?>

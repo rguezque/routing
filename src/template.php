@@ -16,10 +16,10 @@ namespace routing\template;
 
 use RuntimeException;
 
+use function routing\get_routing_data;
 use function routing\helper\add_leading_slash;
 use function routing\helper\str_ends_with;
-use function routing\http\setglobal;
-use function routing\http\getglobal;
+use function routing\set_routing_data;
 
 /**
  * Asigna la ruta al directorio de plantillas
@@ -28,7 +28,7 @@ use function routing\http\getglobal;
  * @return void
  */
 function set_views_path(string $path): void {
-    setglobal('VIEWS_PATH', rtrim($path, '/\\'));
+    set_routing_data('VIEWS_PATH', rtrim($path, '/\\'));
 }
 
 /**
@@ -37,7 +37,7 @@ function set_views_path(string $path): void {
  * @return string
  */
 function get_views_path(): string {
-    return getglobal('VIEWS_PATH') ?? '';
+    return get_routing_data('VIEWS_PATH') ?? '';
 }
 
 /**
@@ -49,7 +49,7 @@ function get_views_path(): string {
  * @return mixed
  * @throws RuntimeException
  */
-function template(string $template, array $arguments = [], bool $as_string = false) {
+function render(string $template, array $arguments = [], bool $as_string = false) {
     if(!str_ends_with($template, '.php')) {$template .= '.php';}
 
     $template = get_views_path() . add_leading_slash($template);

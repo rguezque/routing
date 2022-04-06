@@ -8,7 +8,6 @@
  /**
   * Utilidades
   * 
-  * @function string glue(string ...$vars) Concatena cadenas de texto o caracteres
   * @function string pre(string $string) Preformatea una cadena de texto
   * @function string add_trailing_slash(string $str) Agrega un slash al final de una cadena de texto
   * @function string remove_trailing_slash(string $str) Remueve slashes al final de una cadena de texto
@@ -16,20 +15,10 @@
   * @function string remove_leading_slash(string $str) Remueve slashes al inicio de una cadena de texto
   * @function bool str_starts_with(string $haystack, string $needle) Devuelve true si una cadena de texto tiene un prefijo específico
   * @function bool str_ends_with(string $haystack, string $needle) Devuelve true si una cadena de texto tiene un sufijo específico
-  * @function string str_path(string $path) Limpia y prepara el string de una ruta
+  * @function string pathformat(string $path) Limpia y prepara el string de una ruta
   * @function bool is_assoc_array(array $array) Devuelve true si el array evaluado es asociativo
   */
 namespace routing\helper;
-
-/**
- * Concatena cadenas de texto o caracteres
- * 
- * @param string $vars Cadenas de texto separadas por comas
- * @return string
- */
-function glue(string ...$vars): string {
-    return implode('', $vars);
-}
 
 /**
  * Preformatea una cadena de texto
@@ -109,8 +98,8 @@ function str_ends_with(string $haystack, string $needle): bool {
  * @param string $path String path
  * @return string
  */
-function str_path(string $path): string {
-    return add_leading_slash(remove_trailing_slash($path));
+function pathformat(string $path): string {
+    return add_leading_slash(remove_trailing_slash(trim($path)));
 }
 
 /**

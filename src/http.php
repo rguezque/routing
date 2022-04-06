@@ -237,12 +237,13 @@ function setglobal(string $name, $value): void {
  * Devuelve una variable global específica
  * 
  * @param string $name Nombre de la variable global
+ * @param mixed $default Valor default a devolver si no existe la variable global solicitada
  * @return mixed
  */
-function getglobal(string $name) {
+function getglobal(string $name, $default = null) {
     $globals = get_globals_params();
 
-    return isset($globals[$name]) ? $globals[$name] : null;
+    return $globals[$name] ?? $default;
 }
 
 /**
@@ -287,16 +288,13 @@ function response(string $content = '', int $code = HTTP_OK, array $headers = []
 /**
  * Devuelve una respuesta HTTP en formato json
  * 
- * @param array $data Array de datos a procesar y devolver
+ * @param mixed $data Datos a procesar y devolver
+ * @param bool $encode Si los datos ya están en formato JSON, se envía false
  * @return void
  */
-function json_response(array $data): void {
-    // Solo acepta datos en array asociativo
-    if(!is_assoc_array($data)) {
-        throw new InvalidArgumentException('Formato incorrecto de datos. Se esperaba un array asociativo.');
-    }
-
-    response(json_encode($data, JSON_PRETTY_PRINT), HTTP_OK, ['Content-Type' => 'application/json']);
+function json_response($data, bool $encode = true): void {
+    $data = $encode ? json_encode($data, JSON_PRETTY_PRINT) : $data;
+    response($data, HTTP_OK, ['Content-Type' => 'application/json']);
 }
 
 /**

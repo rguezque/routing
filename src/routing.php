@@ -50,17 +50,17 @@ set_routing_data('ALLOWED_REQUEST_METHODS', ['GET', 'POST']);
 /**
  * Colección de rutas
  */
-set_routing_data('ROUTES', array());
+set_routing_data('ROUTES', []);
 
 /**
  * Colección de URI de cada ruta
  */
-set_routing_data('ROUTE_NAMES', array());
+set_routing_data('ROUTE_NAMES', []);
 
 /**
  * Almacena definiciones de hooks (ganchos)
  */
-set_routing_data('HOOKS', array('before' => [], 'after' => []));
+set_routing_data('HOOKS', ['before' => [], 'after' => []]);
 
 /**
  * Define un namespace para un grupo de rutas
@@ -113,72 +113,79 @@ function get_routing_data(string $key, $default = null) {
 
 /**
  * Ejecuta el router
- * 
- * @return void
- * @throws OutOfBoundsException
- * @throws RuntimeException
  */
-function dispatch(): void {
-    // Variable bandera que asegura una sola ejecución de la función routing\dispatch()
+function dispatch() {
+    // Variable bandera que asegura una sola ejecución de la función routing\handle_request()
     static $invoke_once = false;
 
     if(!$invoke_once) {
-        $server         = get_server_params();
-        $request_uri    = parse_request_uri($server['REQUEST_URI']);
-        $request_method = $server['REQUEST_METHOD'];
-
-        // Valida que el método de petición recibido sea soportado por el router
-        if(!in_array($request_method, get_routing_data('ALLOWED_REQUEST_METHODS'))) {
-            throw new OutOfBoundsException(sprintf('El método de petición %s no está soportado.', $request_method));
-        }
-
-        // Dependiendo del método de petición http se elige el array correspondiente de rutas
-        $all_routes = get_routing_data('ROUTES');
-        $routes = $all_routes[$request_method];
-
-        // Separa y extrae el URI solicitado de los parámetros GET que pudieran ser enviados por la URI
-        parse_request_uri($request_uri);
-        // El slash al final no se toma en cuenta
-        $request_uri = ('/' !== $request_uri) ? remove_trailing_slash($request_uri) : $request_uri;
-
-        foreach($routes as $route) {
-            // Prepara el string de la ruta
-            $path = $route['path'];
-            $path = get_basepath() . $path;
-        
-            if(preg_match(route_pattern($path), $request_uri, $arguments)) {
-                array_shift($arguments);
-        
-                $invoke_once = true;
-                $callback = $route['callback'];
-                $route_name = $route['name'];
-                
-                $hooks = get_routing_data('HOOKS');
-                // Busca si existe un hook antes y lo ejecuta
-                if(array_key_exists($route_name, $hooks['before'])) {
-                    $result = call_user_func($hooks['before'][$route_name]);
-                    if($result) {
-                        $arguments = array_merge($arguments, ['@bdata' => $result]);
-                    }
-                }
-
-                // Ejecuta el controlador de la ruta
-                $result = call_user_func($callback, $arguments);
-
-                // Busca si existe un hook después y lo ejecuta
-                if(array_key_exists($route_name, $hooks['after'])) {
-                    $result 
-                        ? call_user_func($hooks['after'][$route_name], ['@cdata' => $result]) 
-                        : call_user_func($hooks['after'][$route_name]);
-                }
-
-                return;
-            }
-        }
-
-        response('', 404);
-        throw new RuntimeException(sprintf('No se encontró la ruta solicitada "%s"', $request_uri));
+        handle_request();
+        $invoke_once = true;
     }
+}
+
+/**
+ * Evalua la petición http y despacha los controladores de las rutas correspondientes
+ * 
+ * @throws OutOfBoundsException
+ * @throws RuntimeException
+ * @return void
+ */
+function handle_request(): void {
+    $server         = get_server_params();
+    $request_uri    = parse_request_uri($server['REQUEST_URI']);
+    $request_method = $server['REQUEST_METHOD'];
+
+    // Valida que el método de petición recibido sea soportado por el router
+    if(!in_array($request_method, get_routing_data('ALLOWED_REQUEST_METHODS'))) {
+        throw new OutOfBoundsException(sprintf('El método de petición %s no está soportado.', $request_method));
+    }
+
+    // Dependiendo del método de petición http se elige el array correspondiente de rutas
+    $all_routes = get_routing_data('ROUTES');
+    $routes = $all_routes[$request_method];
+
+    // Separa y extrae el URI solicitado de los parámetros GET que pudieran ser enviados por la URI
+    parse_request_uri($request_uri);
+    // El slash al final no se toma en cuenta
+    $request_uri = ('/' !== $request_uri) ? remove_trailing_slash($request_uri) : $request_uri;
+
+    foreach($routes as $route) {
+        // Prepara el string de la ruta
+        $path = $route['path'];
+        $path = get_basepath() . $path;
+        
+        if(preg_match(route_pattern($path), $request_uri, $arguments)) {
+            array_shift($arguments);
+        
+            $callback = $route['callback'];
+            $route_name = $route['name'];
+                
+            $hooks = get_routing_data('HOOKS');
+            // Busca si existe un hook antes y lo ejecuta
+            if(array_key_exists($route_name, $hooks['before'])) {
+                $result = call_user_func($hooks['before'][$route_name]);
+                if($result) {
+                    $arguments = array_merge($arguments, ['@bdata' => $result]);
+                }
+            }
+
+            // Ejecuta el controlador de la ruta
+            $result = call_user_func($callback, $arguments);
+
+            // Busca si existe un hook después y lo ejecuta
+            if(array_key_exists($route_name, $hooks['after'])) {
+                $result 
+                    ? call_user_func($hooks['after'][$route_name], ['@cdata' => $result]) 
+                    : call_user_func($hooks['after'][$route_name]);
+            }
+
+            return;
+        }
+    }
+
+    response('', 404);
+    throw new RuntimeException(sprintf('No se encontró la ruta solicitada "%s"', $request_uri));
 }
 
 /**
@@ -270,7 +277,7 @@ function route(string $method, $path_data, $callback): void {
     ];
     set_routing_data('ROUTES', $routes);
 
-    // Guarda o el nombre de la ruta
+    // Guarda el nombre de la ruta
     if(isset($name)) {
         save_route_name($path, $name);
     }
@@ -286,7 +293,7 @@ function route(string $method, $path_data, $callback): void {
 function with_prefix(string $prefix, Closure $closure): void {
     $prefix = pathformat($prefix);
     set_routing_data('GROUP_PREFIX', $prefix);
-    $closure();
+    call_user_func($closure);
     set_routing_data('GROUP_PREFIX', '');
 }
 
@@ -401,8 +408,6 @@ function route_pattern(string $path): string {
  * @param string $uri URI a analizar
  * @return string
  */
-function parse_request_uri(string &$uri): string {
+function parse_request_uri(string $uri): string {
     return rawurldecode(parse_url($uri, PHP_URL_PATH));
 }
-
-?>
